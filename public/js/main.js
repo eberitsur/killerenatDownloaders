@@ -139,7 +139,7 @@ document.getElementById('historialList').addEventListener('click', async (e) => 
 
   }
 
-  // Eliminar (ya está fuera del if)
+  // Eliminar 
   if (e.target.classList.contains('btnEliminarArchivo')) {
     const boton = e.target;
     const archivo = decodeURIComponent(boton.dataset.archivo);

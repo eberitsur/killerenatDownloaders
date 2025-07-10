@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Descargar Video</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .card {
+            max-width: 600px;
+            margin: auto;
+            border-radius: 16px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .navbar-light .navbar-nav .nav-link {
+            color: #000;
+        }
+
+        .navbar {
+            padding: 0.5rem 1rem;
+        }
+
+        /* Ocultar texto y mostrar íconos en el navbar en pantallas pequeñas */
+        .navbar-nav .nav-link {
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .navPersonalizado{
+            background-color: cornflowerblue !important;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+    <!-- Navbar -->
+    <section>
+        <nav class="navbar navbar-expand-lg fixed-top bg-light navbar-light px-3 navPersonalizado">
+            <div class="container-fluid">
+                <!-- Asegúrate de tener cargado Bootstrap y/o Font Awesome según lo que uses -->
+                <ul class="navbar-nav align-items-center me-3">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/convertidor">
+                            convertidor
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+    </section>
+    <div class="container mt-5" style="margin-top: 4% !important;">
+        <div class="card shadow p-4">
+            <h2 class="text-center mb-4">Descargador de Videos</h2>
+            <form id="downloadForm">
+                <div class="mb-3">
+                    <label for="url" class="form-label">URL del Video</label>
+                    <input type="url" class="form-control" id="url" name="url" required>
+                </div>
+                <div class="mb-3">
+                    <label for="titulo" class="form-label">Titulo</label>
+                    <input type="text" class="form-control" id="titulo" name="titulo">
+                </div>
+                <div class="mb-3">
+                    <label for="format" class="form-label">Formato</label>
+                    <select class="form-select" id="format" name="format" required>
+                        <option value="mp4">Video (MP4)</option>
+                        <option value="mp3">Audio (MP3)</option>
+                    </select>
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">Descargar</button>
+                </div>
+            </form>
+            <div class="mt-3" id="progressContainer" style="display: none;">
+                <div class="progress">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                        role="progressbar" style="width: 0%">0%
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3" id="result"></div>
+        </div>
+
+        <div class="card mt-4 p-3 shadow-sm">
+            <h5>Historial de Descargas</h5>
+            <div class="mb-3 d-flex gap-2">
+                <button id="btnEliminarTodos" class="btn btn-danger btn-sm">🗑️ Eliminar Todos</button>
+                <a href="/descargar-todos" class="btn btn-success btn-sm">⬇️ Descargar Todos</a>
+            </div>
+            <div class="text-center my-3 hidden" id="divBarrHist">
+                <label for="barraProgreso" class="form-label">Progreso de conversión</label>
+                <progress id="barraProgresoDescarga" value="0" max="100" style="width: 100%;"></progress>
+                <span id="progresoTextoDescarga">0%</span>
+            </div>
+            <ul class="list-group" id="historialList">
+                <% if (historial.length===0) { %>
+                    <li class="list-group-item text-center text-muted">No hay descargas todavía.</li>
+                    <% } else { %>
+                        <% historial.forEach(h=> { %>
+                            <li class="list-group-item d-flex justify-content-between align-items-center"
+                                data-archivo="<%= h.archivoConvertido %>">
+                                <div>
+                                    <strong>
+                                        <%= h.titulo || h.nombreDescarga %>
+                                    </strong> - <small>
+                                        <%= h.formato ? h.formato.toUpperCase() : 'MP4' %>
+                                    </small><br>
+                                    <small class="text-muted">
+                                        <%= h.fecha || '' %>
+                                    </small>
+                                </div>
+                                <div>
+                                    <a href="/descargar/<%= encodeURIComponent(h.archivoConvertido) %>"
+                                        class="btn btn-primary btn-sm me-2">Descargar</a>
+                                    <button class="btn btn-danger btn-sm btnEliminarArchivo">Eliminar</button>
+                                </div>
+                            </li>
+                            <% }) %>
+                                <% } %>
+            </ul>
+        </div>
+    </div>
+    <script>
+        const evtSource = new EventSource('/progress-descarga');
+
+        evtSource.onmessage = function (event) {
+            const percent = parseInt(event.data);
+            const progressBar = document.getElementById('barraProgresoDescarga');
+            const progresoTexto = document.getElementById('progresoTextoDescarga');
+            const barraDiv = document.getElementById('divBarrHist');
+
+            if (barraDiv) {
+                barraDiv.classList.remove('hidden'); // Mostrar barra al recibir progreso
+            }
+
+            if (progressBar) {
+                progressBar.value = percent;
+            }
+            if (progresoTexto) {
+                progresoTexto.textContent = percent + '%';
+            }
+
+            if (percent >= 100) {
+
+                setTimeout(() => {
+                    const verificarEstado = async (archivoA) => {
+                        try {
+                            const state = await fetch('/conversion-estado');
+                            const Status = await state.json();
+                            if (Status.estado === 'convirtiendo') {
+                                console.log('⏳ Esperando conversión...');
+                                setTimeout(() => verificarEstado(archivoA), 5000);
+                            } else if (Status.estado === 'listo') {
+                                const response1 = await fetch(`/descargar-final/${encodeURIComponent(archivoA)}`);
+                                const disposition = response1.headers.get('Content-Disposition');
+                                var nombre
+                                if (disposition && disposition.includes('filename=')) {
+                                    const matches = disposition.match(/filename="(.+)"/);
+                                    if (matches && matches[1]) {
+                                        nombre = matches[1];
+                                    }
+                                }
+                                const blob = await response1.blob();
+                                const urlBlob = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = urlBlob;
+                                a.download = nombre || 'archivo.mp4';
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                URL.revokeObjectURL(urlBlob);
+
+                            } else {
+                                alert('❌ Error al descargar');
+
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            alert('❌ Error en la verificación');
+                            boton.disabled = false;
+                        }
+                    };
+                    var archivo = '/'
+                    verificarEstado(archivo);
+
+                    if (barraDiv) barraDiv.classList.add('hidden'); // Ocultar después de 5s
+                    if (progressBar) progressBar.value = 0;
+                    if (progresoTexto) progresoTexto.textContent = '0%';
+                }, 5000);
+            }
+        };
+
+    </script>
+    <script src="/js/main.js"></script>
+
+</body>
+
+</html>

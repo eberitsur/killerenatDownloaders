@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Convertidor Multimedia Personalizado</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .hidden {
+            display: none !important;
+        }
+
+        .progress {
+            height: 20px;
+        }
+
+        .form-label {
+            font-weight: bold;
+        }
+
+        /* Solo afecta a pantallas pequeñas */
+        @media only screen and (max-width: 768px) {
+
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            #formContainer {
+                padding: 1rem;
+                width: 100vw;
+                height: 100vh;
+                box-sizing: border-box;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+
+            #contenedorForm {
+                width: 100%;
+                max-width: 100%;
+                max-height: 90vh;
+                overflow-y: auto;
+                padding: 1rem;
+                box-sizing: border-box;
+                margin: 0;
+            }
+
+            input,
+            select,
+            button,
+            textarea {
+                width: 100% !important;
+                font-size: 1rem;
+            }
+
+            .progress {
+                height: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+    <!-- 🔝 NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/">Descargador</a>
+        </div>
+    </nav>
+    <div class="container mt-5" id="formContainer">
+        <div class="card shadow rounded-4 p-4" id="contenedorForm">
+            <h2 class="text-center mb-4 text-primary">🎬 Convertidor Multimedia Personalizado</h2>
+
+            <div class="mb-3">
+                <label for="inputArchivo" class="form-label">Selecciona tu archivo</label>
+                <input type="file" class="form-control" id="inputArchivo" accept="*/*">
+            </div>
+
+            <div class="mb-3">
+                <label for="formatoDestino" class="form-label">Formato de salida</label>
+                <select id="formatoDestino" class="form-select">
+                    <option disabled selected>Selecciona un archivo primero</option>
+                </select>
+            </div>
+
+            <div id="opcionesAdicionales" class="mb-3">
+                <!-- Opciones aparecerán aquí -->
+            </div>
+
+            <div class="d-grid">
+                <button id="btnConvertir" class="btn btn-success btn-lg rounded-pill">🔄 Convertir</button>
+            </div>
+
+            <div id="barraProgresoConvertidorArchivo" class="mt-4 hidden">
+                <label for="progresoConvertidorArchivo" class="form-label">Progreso:</label>
+                <div class="progress mb-1">
+                    <progress id="progresoConvertidorArchivo" max="100" value="0" class="form-control w-100"></progress>
+                </div>
+                <div class="text-end"><small id="textoProgresoConvertidorArchivo">0%</small></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script>
+        const input = document.getElementById('inputArchivo');
+        const formatoDestino = document.getElementById('formatoDestino');
+        const opcionesAdicionales = document.getElementById('opcionesAdicionales');
+        const barraWrapper = document.getElementById('barraProgresoConvertidorArchivo');
+        const barra = document.getElementById('progresoConvertidorArchivo');
+        const texto = document.getElementById('textoProgresoConvertidorArchivo');
+
+        const formatos = {
+            video: ['mp4', 'webm', 'avi', 'mov', 'flv', 'mkv', 'mpeg', 'ts', 'gif'],
+            audio: ['mp3', 'aac', 'm4a', 'ogg', 'flac', 'wav', 'opus'],
+            image: ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff']
+        };
+
+        input.addEventListener('change', () => {
+            const archivo = input.files[0];
+            if (!archivo) return;
+
+            const tipo = archivo.type.split('/')[0];
+            formatoDestino.innerHTML = '';
+            opcionesAdicionales.innerHTML = '';
+
+            if (formatos[tipo]) {
+                formatos[tipo].forEach(fmt => {
+                    const opt = document.createElement('option');
+                    opt.value = fmt;
+                    opt.textContent = fmt;
+                    formatoDestino.appendChild(opt);
+                });
+
+                if (tipo === 'video') {
+                    opcionesAdicionales.innerHTML = `
+            <label class="form-label">Resolución:</label>
+            <select id="resolucion" class="form-select mb-2">
+                <option value="4000">4000p</option>
+                <option value="2000">2000p</option>
+              <option value="1080">1080p</option>
+              <option value="720">720p</option>
+              <option value="480">480p</option>
+            </select>
+            <label class="form-label">Bitrate de video (ej: 1M):</label>
+            <input type="text" id="bitrateVideo" class="form-control" placeholder="1M">
+          `;
+                } else if (tipo === 'audio') {
+                    opcionesAdicionales.innerHTML = `
+            <label class="form-label">Bitrate de audio (ej: 128k):</label>
+            <input type="text" id="bitrateAudio" class="form-control" placeholder="128k">
+          `;
+                } else if (tipo === 'image') {
+                    opcionesAdicionales.innerHTML = `
+            <label class="form-label">Calidad (1-100):</label>
+            <input type="number" id="calidadImagen" class="form-control" min="1" max="100" value="90">
+          `;
+                }
+            } else {
+                const opt = document.createElement('option');
+                opt.textContent = 'Tipo de archivo no compatible';
+                formatoDestino.appendChild(opt);
+            }
+        });
+
+        document.getElementById('btnConvertir').addEventListener('click', async () => {
+            const archivo = input.files[0];
+            if (!archivo) return alert('Selecciona un archivo');
+
+            const formato = formatoDestino.value;
+            const tipo = archivo.type.split('/')[0];
+            const formData = new FormData();
+
+            formData.append('archivo', archivo);
+            formData.append('formato', formato);
+
+            if (tipo === 'video') {
+                formData.append('resolucion', document.getElementById('resolucion')?.value || '');
+                formData.append('bitrateVideo', document.getElementById('bitrateVideo')?.value || '');
+            } else if (tipo === 'audio') {
+                formData.append('bitrateAudio', document.getElementById('bitrateAudio')?.value || '');
+            } else if (tipo === 'image') {
+                formData.append('calidadImagen', document.getElementById('calidadImagen')?.value || '');
+            }
+
+            barraWrapper.classList.remove('hidden');
+
+            const res = await fetch('/convertir-archivo', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) return alert('❌ Error al iniciar la conversión');
+
+            const evtSource = new EventSource('/progreso-conversion');
+            evtSource.onmessage = async (event) => {
+                const percent = parseInt(event.data);
+                barra.value = percent;
+                texto.textContent = percent + '%';
+
+                if (percent >= 100) {
+                    evtSource.close();
+
+                    setTimeout(async () => {
+                        try {
+                            const r = await fetch('/descargar-archivo-convertido');
+                            const blob = await r.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = "archivo_convertido." + formato;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            URL.revokeObjectURL(url);
+                        } catch (err) {
+                            alert('❌ Error al descargar');
+                        }
+
+                        barraWrapper.classList.add('hidden');
+                        barra.value = 0;
+                        texto.textContent = '0%';
+                    }, 5000);
+                }
+            };
+        });
+    </script>
+</body>
+
+</html>
